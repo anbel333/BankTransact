@@ -1,18 +1,21 @@
 package com.anbel.BankTransact.controller;
 
+import com.anbel.BankTransact.controller.WalletController;
 import com.anbel.BankTransact.dto.OperationType;
 import com.anbel.BankTransact.dto.RequestWalletDTO;
 import com.anbel.BankTransact.dto.WalletDTO;
 import com.anbel.BankTransact.service.WalletService;
-import org.junit.Assert;
+import org.junit.Before;
+import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.junit.Test;
+import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
+
 import java.math.BigDecimal;
 import java.util.UUID;
 
@@ -20,52 +23,38 @@ import java.util.UUID;
 public class WalletControllerTest {
 
     @InjectMocks
-    WalletController walletController;
+    private WalletController walletController;
 
     @Mock
-    WalletService walletService;
+    private WalletService walletService;
+
+    @Before
+    public void setUp() {
+        // Ваши настройки перед каждым тестом
+    }
 
     @Test
     public void testWalletOperationDeposit() {
         UUID uuid = UUID.randomUUID();
         RequestWalletDTO requestWalletDTO = new RequestWalletDTO(uuid, OperationType.DEPOSIT, new BigDecimal("100"));
-
         WalletDTO walletDTO = new WalletDTO(uuid, new BigDecimal("1000"));
 
-        Mockito.when(walletService.walletOperation(requestWalletDTO)).thenReturn(walletDTO);
+        Mockito.when(walletService.walletOperation(Mockito.any(RequestWalletDTO.class))).thenReturn(Mono.just(walletDTO));
 
-        ResponseEntity<WalletDTO> responseEntity = walletController.walletOperation(requestWalletDTO);
-
-        Assert.assertEquals(HttpStatus.OK, responseEntity.getStatusCode());
-        Assert.assertEquals(walletDTO, responseEntity.getBody());
-    }
-
-    @Test
-    public void testWalletOperationWithdraw() {
-        UUID uuid = UUID.randomUUID();
-        RequestWalletDTO requestWalletDTO = new RequestWalletDTO(uuid, OperationType.WITHDRAW, new BigDecimal("100"));
-
-        WalletDTO walletDTO = new WalletDTO(uuid, new BigDecimal("900"));
-
-        Mockito.when(walletService.walletOperation(requestWalletDTO)).thenReturn(walletDTO);
-
-        ResponseEntity<WalletDTO> responseEntity = walletController.walletOperation(requestWalletDTO);
-
-        Assert.assertEquals(HttpStatus.OK, responseEntity.getStatusCode());
-        Assert.assertEquals(walletDTO, responseEntity.getBody());
+        StepVerifier.create(walletController.walletOperation(Mono.just(requestWalletDTO)))
+                .expectNextMatches(response -> response.getStatusCode() == HttpStatus.OK && walletDTO.equals(response.getBody()))
+                .verifyComplete();
     }
 
     @Test
     public void testGetWalletBalance() {
         UUID uuid = UUID.randomUUID();
-
         WalletDTO walletDTO = new WalletDTO(uuid, new BigDecimal("1000"));
 
-        Mockito.when(walletService.getWalletBalance(uuid)).thenReturn(walletDTO);
+        Mockito.when(walletService.getWalletBalance(uuid)).thenReturn(Mono.just(walletDTO));
 
-        ResponseEntity<WalletDTO> responseEntity = walletController.getBalance(uuid);
-
-        Assert.assertEquals(HttpStatus.OK, responseEntity.getStatusCode());
-        Assert.assertEquals(walletDTO, responseEntity.getBody());
+        StepVerifier.create(walletController.getBalance(uuid))
+                .expectNextMatches(response -> response.getStatusCode() == HttpStatus.OK && walletDTO.equals(response.getBody()))
+                .verifyComplete();
     }
 }

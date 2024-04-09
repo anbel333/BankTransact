@@ -1,97 +1,110 @@
 package com.anbel.BankTransact.service;
 
+import com.anbel.BankTransact.service.WalletService;
+import com.anbel.BankTransact.repository.WalletRepository;
+import com.anbel.BankTransact.model.Wallet;
+import com.anbel.BankTransact.dto.RequestWalletDTO;
+import com.anbel.BankTransact.dto.WalletDTO;
 import com.anbel.BankTransact.Exception.InsufficientFundsException;
 import com.anbel.BankTransact.Exception.WalletNotFoundException;
 import com.anbel.BankTransact.dto.OperationType;
-import com.anbel.BankTransact.dto.RequestWalletDTO;
-import com.anbel.BankTransact.dto.WalletDTO;
-import com.anbel.BankTransact.model.Wallet;
-import com.anbel.BankTransact.repository.WalletRepository;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
+import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
+
 import java.math.BigDecimal;
-import java.util.Optional;
 import java.util.UUID;
 
 @RunWith(MockitoJUnitRunner.class)
 public class WalletServiceTest {
     @InjectMocks
     private WalletService walletService;
+
     @Mock
     private WalletRepository walletRepository;
 
+    private UUID uuid;
+    private Wallet wallet;
+
+    @Before
+    public void setUp() {
+        uuid = UUID.randomUUID();
+        wallet = new Wallet(uuid, new BigDecimal("500"));
+    }
+
     @Test
     public void testWalletOperationDeposit() {
-        UUID uuid = UUID.randomUUID();
-        Wallet wallet = new Wallet(uuid, new BigDecimal("500"));
-
         RequestWalletDTO requestWalletDTO = new RequestWalletDTO(uuid, OperationType.DEPOSIT, new BigDecimal("100"));
-        Mockito.when(walletRepository.findById(uuid)).thenReturn(Optional.of(wallet));
+        Mockito.when(walletRepository.findById(uuid)).thenReturn(Mono.just(wallet));
+        Mockito.when(walletRepository.save(Mockito.any(Wallet.class))).thenAnswer(i -> Mono.just(i.getArgument(0)));
 
-        WalletDTO responseWalletDto = walletService.walletOperation(requestWalletDTO);
-
-        Assert.assertEquals(new BigDecimal("600"), responseWalletDto.getAmount());
+        StepVerifier.create(walletService.walletOperation(requestWalletDTO))
+                .assertNext(walletDTO -> {
+                    Assert.assertEquals(uuid, walletDTO.getUuid());
+                    Assert.assertEquals(0, walletDTO.getAmount().compareTo(new BigDecimal("600")));
+                })
+                .verifyComplete();
     }
 
     @Test
     public void testWalletOperationWithdraw() {
-        UUID uuid = UUID.randomUUID();
-        Wallet wallet = new Wallet(uuid, new BigDecimal("500"));
-
         RequestWalletDTO requestWalletDTO = new RequestWalletDTO(uuid, OperationType.WITHDRAW, new BigDecimal("100"));
-        Mockito.when(walletRepository.findById(uuid)).thenReturn(Optional.of(wallet));
+        Mockito.when(walletRepository.findById(uuid)).thenReturn(Mono.just(wallet));
+        Mockito.when(walletRepository.save(Mockito.any(Wallet.class))).thenAnswer(i -> Mono.just(i.getArgument(0)));
 
-        WalletDTO responseWalletDTO = walletService.walletOperation(requestWalletDTO);
-
-        Assert.assertEquals(new BigDecimal("400"), responseWalletDTO.getAmount());
+        StepVerifier.create(walletService.walletOperation(requestWalletDTO))
+                .assertNext(walletDTO -> {
+                    Assert.assertEquals(uuid, walletDTO.getUuid());
+                    Assert.assertEquals(0, walletDTO.getAmount().compareTo(new BigDecimal("400")));
+                })
+                .verifyComplete();
     }
 
-    @Test(expected = InsufficientFundsException.class)
+    @Test
     public void testWalletOperationInsufficientFunds() {
-        UUID uuid = UUID.randomUUID();
-        Wallet wallet  = new Wallet(uuid, new BigDecimal("100"));
+        RequestWalletDTO requestWalletDTO = new RequestWalletDTO(uuid, OperationType.WITHDRAW, new BigDecimal("600"));
+        Mockito.when(walletRepository.findById(uuid)).thenReturn(Mono.just(wallet));
 
-        RequestWalletDTO requestWalletDTO = new RequestWalletDTO(uuid, OperationType.WITHDRAW, new BigDecimal("200"));
-        Mockito.when(walletRepository.findById(uuid)).thenReturn(Optional.of(wallet));
-
-        walletService.walletOperation(requestWalletDTO);
+        StepVerifier.create(walletService.walletOperation(requestWalletDTO))
+                .expectError(InsufficientFundsException.class)
+                .verify();
     }
 
-    @Test(expected = WalletNotFoundException.class)
-    public void testPerformOperation_WalletNotFound() {
-        UUID uuid = UUID.randomUUID();
-
+    @Test
+    public void testPerformOperationWalletNotFound() {
         RequestWalletDTO requestWalletDTO = new RequestWalletDTO(uuid, OperationType.WITHDRAW, new BigDecimal("200"));
-        Mockito.when(walletRepository.findById(uuid)).thenReturn(Optional.empty());
+        Mockito.when(walletRepository.findById(uuid)).thenReturn(Mono.empty());
 
-        walletService.walletOperation(requestWalletDTO);
+        StepVerifier.create(walletService.walletOperation(requestWalletDTO))
+                .expectError(WalletNotFoundException.class)
+                .verify();
     }
 
-    @Test(expected = WalletNotFoundException.class)
+    @Test
     public void testGetWalletBalanceWalletNotFound() {
-        UUID uuid = UUID.randomUUID();
+        Mockito.when(walletRepository.findById(uuid)).thenReturn(Mono.empty());
 
-        Mockito.when(walletRepository.findById(uuid)).thenReturn(Optional.empty());
-
-        walletService.getWalletBalance(uuid);
+        StepVerifier.create(walletService.getWalletBalance(uuid))
+                .expectError(WalletNotFoundException.class)
+                .verify();
     }
 
     @Test
     public void testGetWalletBalance() {
-        UUID uuid = UUID.randomUUID();
-        Wallet wallet = new Wallet(uuid, new BigDecimal("1000"));
+        Mockito.when(walletRepository.findById(uuid)).thenReturn(Mono.just(wallet));
 
-        Mockito.when(walletRepository.findById(uuid)).thenReturn(Optional.of(wallet));
-
-        WalletDTO walletDTO = walletService.getWalletBalance(uuid);
-
-        Assert.assertEquals(uuid, walletDTO.getUuid());
-        Assert.assertEquals(new BigDecimal("1000"), walletDTO.getAmount());
+        StepVerifier.create(walletService.getWalletBalance(uuid))
+                .assertNext(walletDTO -> {
+                    Assert.assertEquals(uuid, walletDTO.getUuid());
+                    Assert.assertEquals(0, walletDTO.getAmount().compareTo(new BigDecimal("500")));
+                })
+                .verifyComplete();
     }
-
 }
