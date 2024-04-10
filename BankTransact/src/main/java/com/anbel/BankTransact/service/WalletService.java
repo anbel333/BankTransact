@@ -22,7 +22,7 @@ public class WalletService {
 
     @Transactional
     public WalletDTO walletOperation(RequestWalletDTO request) {
-        Wallet wallet = walletRepository.findById(request.getWalletId())
+        Wallet wallet = walletRepository.findByIdForUpdate(request.getWalletId())
                 .orElseGet(() -> {
                     Wallet newWallet = new Wallet();
                     newWallet.setBalance(BigDecimal.ZERO);
